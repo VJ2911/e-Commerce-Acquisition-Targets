@@ -1,0 +1,112 @@
+import pandas as pd
+ 
+df = pd.read_excel(r"C:\Users\VARUN\Downloads\Sample_Longlist_Data.xlsx")
+
+df
+
+df.isnull().sum()
+
+df.describe()
+
+print(df.dtypes)
+
+import re
+
+# Convert to string
+df['sellerproductcount'] = df['sellerproductcount'].astype(str)
+
+# Parsed product count
+df['parsed_product_count'] = df['sellerproductcount'].apply(lambda x: re.sub('[^0-9]', '', x.split('over')[1]) if 'over' in x else re.sub('[^0-9]', '', x.split('of')[1]) if 'of' in x else '')
+
+# Convert to numeric
+df['parsed_product_count'] = pd.to_numeric(df['parsed_product_count'], errors='coerce')
+
+df
+
+mean=df['parsed_product_count'].mean()
+df['parsed_product_count'].fillna(value=mean, inplace=True)
+
+
+# Convert to string
+df['sellerratings'] = df['sellerratings'].astype(str)
+
+# Parsed positive ratings percentage
+df['parsed_positive_percentage'] = df['sellerratings'].apply(lambda x: re.findall(r'\d+', x.split('%')[0])[0] if '%' in x else '')
+
+# Parsed positive ratings count
+df['parsed_positive_count'] = df['sellerratings'].apply(lambda x: re.findall(r'\d+', x.split('(')[1])[0] if '(' in x else '')
+
+# Convert to numeric
+df['parsed_positive_percentage'] = pd.to_numeric(df['parsed_positive_percentage'], errors='coerce')
+df['parsed_positive_count'] = pd.to_numeric(df['parsed_positive_count'], errors='coerce')
+
+df
+
+# Convert to string
+df['sellerdetails'] = df['sellerdetails'].astype(str)
+
+# Parsed phone numbers
+df['parsed_phone_numbers'] = df['sellerdetails'].apply(lambda x: re.findall(r'(\d{3}-\d{3}-\d{4}|\(\d{3}\) \d{3}-\d{4}|\+\d{1,2} \d{3} \d{3} \d{4})', x))
+
+# Parsed email IDs
+df['parsed_email_ids'] = df['sellerdetails'].apply(lambda x: re.findall(r'[\w\.-]+@[\w\.-]+', x))
+
+df
+
+# Convert to string
+df['businessaddress'] = df['businessaddress'].astype(str)
+
+# Function to extract country from address
+def extract_country(address):
+    if 'US' in address or 'United States' in address:
+        return 'US'
+    elif 'DE' in address or 'Germany' in address:
+        return 'DE'
+    elif 'CN' in address or 'China' in address:
+        return 'CN'
+    else:
+        return None
+
+# Extract country from business address
+df['parsed_country'] = df['businessaddress'].apply(extract_country)
+
+df
+
+print(df["parsed_country"].value_counts())
+
+df.drop(df.columns[[0,1,2,3,4,5,6,7,8,9]], axis=1, inplace=True)
+df
+
+df = df[df['parsed_country'] != 'CN']
+df
+
+#acc. to priority
+weight_brand_count = 0.2
+weight_negative_ratings_30d = 0.3
+weight_negative_ratings_90d = 0.2
+weight_negative_ratings_12m = 0.2
+weight_product_ratings1 = 0.05
+weight_product_ratings2 = 0.05
+
+# Calculating composite score
+df['composite_score'] = (
+    weight_brand_count * df['Count of seller brands'] +
+    # give higher scores to sellers with a lower percentage of negative ratings
+    weight_negative_ratings_30d * (100 - df['Max % of negative seller ratings - last 30 days']) +
+    weight_negative_ratings_90d * (100 - df['Max % of negative seller ratings - last 90 days']) +
+    weight_negative_ratings_12m * (100 - df['Max % of negative seller ratings - last 12 months']) +
+    weight_product_ratings1 * df['Hero Product 1 #ratings'] +
+    weight_product_ratings2 * df['Hero Product 2 #ratings']
+)
+
+# Rank sellers 
+df['rank'] = df['composite_score'].rank(ascending=False)
+
+# Select top sellers 
+top_sellers = df[df['rank'] <= 10]  # Select top 10 sellers
+
+# Display the top sellers
+print(top_sellers[['Sample brand name', 'Sample Brand URL', 'composite_score','parsed_phone_numbers','parsed_email_ids']])
+
+
+
